@@ -1,0 +1,163 @@
+---
+title: "EDA of Traffic Stops in Houston, Texas: Data 2401 Final"
+date: "2023-11-24"
+author: "Skyler Phillips"
+output:
+  slidy_presentation: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Algorithms are embedded into nearly every facet of our lives. Predictive algorithms function as tools for optimizing business performance and streamlining our day to day actions. Albeit some data must be used as reference in order to generate accurate predictions. Historical data come bundled with biases and are typically unrepresentative of current day society. Today institutions use predictive algorithms trained on historic data, to streamline their business functions. The rising field of algorithmic fairness is attempting to address and mitigate disproportionate harms from recorded historical biases in data.
+
+Here is an example of this practice today:
+
+-   Today banks currently predict creditworthiness from sensitive attributes in tandem with their financial history. This prediction process is relevant as women were not allowed to open their own bank accounts with protection from credit discrimination until 1974. Historically, bank account records will be practically all owned or operated by males before then.
+
+## Dataset Background:
+
+Similar to predictive banking and hiring: Predictive policing uses historical data and algorithms to identify potential criminal history. Adoption of these methods and recent police conduct prompt this analysis.
+
+-   Curated by the Stanford Open Policing Project (a group of researchers and journalists).
+
+    -   OPP requested data directly from PD's around the country.
+
+-   Publicly available through [the OPP github.](https://github.com/stanford-policylab/opp/blob/master/data_readme.md)
+
+-   Additionally, OPP created a [summary paper called 100M](https://5harad.com/papers/100M-stops.pdf)
+
+    -   Found Veil of Darkness is present in stops performed by Texas State Troopers [source: page 3]
+
+    -   Black and Hispanic drivers are searched on less evidence than White drivers. Also ticketed, searched, and arrested at higher rates than White drivers. [Source: OPP summary video](https://youtu.be/iwOWcuFjNfw)
+
+    -   Geocoded data included from 2017 onward.
+
+Relevant domain source: [HPD Beatmap](https://www.houstontx.gov/police/pdfs/hpd_beat_map.pdf)
+
+## Libraries and Packages
+
+```{r}
+library(readr, warn.conflicts = F)
+library(ggplot2, warn.conflicts = F)
+library(dplyr, warn.conflicts = F)
+library(tidyverse, warn.conflicts = F)
+#library(shiny, warn.conflicts = F)
+
+options(max.print = 30)
+options(scipen = 10)
+
+stopsdf = read_csv("wb225bk3255_tx_houston_2023_01_26.csv/tx_houston_2023_01_26.csv")
+
+```
+
+## Basic information on the dataset
+
+Let's get a brief look at the dataset. We should know how much data we have.
+
+```{r}
+glimpse(stopsdf)
+
+```
+
+What features are numeric?
+
+```{r}
+colnames(stopsdf[,sapply(stopsdf,is.numeric)])
+```
+
+```{r}
+stopsdf %>%
+  summarise_all(function(x) sum(is.na(x))) %>%
+  gather(key = "Column", value = "NA_Count") 
+```
+
+Interesting. There are a lot of na vlaues recorded and longform answers in a few features.
+
+### Districts
+
+Which districts are covered?
+
+```{r}
+stopsdf %>% 
+  group_by(beat, district) %>% 
+  summarise(Count = n()) %>% 
+  arrange(desc(Count))
+```
+
+## Graphs, plots, visualizations
+
+```{r}
+stopsdf %>% 
+  filter(!is.na(subject_sex)) %>% 
+  ggplot(aes(x = subject_sex)) + 
+  geom_bar(fill = "#4472C4", color = "black") + 
+  theme_minimal() + 
+  theme(plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  labs(title = "Distribution of Stops by Sex",
+       x = "Sexes Stopped",
+       y = "Frequency")
+```
+
+## By Race
+
+```{r}
+stopsdf %>% 
+  filter(citation_issued == TRUE & !is.na(subject_race)) %>% 
+  ggplot(aes(x = subject_race)) + 
+  geom_bar(fill = "#4472C4", color = "black") + 
+  theme_minimal() + 
+  theme(plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  labs(title = "Distribution of Citations by Race",
+       x = "Races Stopped",
+       y = "Frequency")
+```
+
+```{r}
+stopsdf %>% 
+  filter(speed > 0 , speed < 200) %>% 
+  ggplot(aes(x = subject_race, y = speed)) + 
+  geom_boxplot(fill = "#4472C4", color = "black") + 
+  theme_minimal() + 
+  labs(title = "Speeding Distrubtion by Race",
+       x = "Races",
+       y = "Speed (mph)")
+```
+
+## Stops in Each Beat
+
+```{r}
+stopsdf %>% 
+  filter(!is.na(beat), !is.na(subject_race), !is.na(subject_sex)) %>% 
+  ggplot(aes(x = subject_sex)) + 
+  geom_bar(fill = "#4472C4", color = "black") +
+  labs(title = "Distribution of Stops by Beat",
+       x = "Races Stopped",
+       y = "Frequency")
+```
+
+Objectives for the final report:
+
+-   Compare present and absent values by feature
+
+-   Analyze stops under the speed limit
+
+-   Analyze car colors stopped
+
+-   Interactive Shiny for comprehensive visualizations
+
+```{r}
+# Analyze the dataset without NA values
+stopsdf_no_na <- na.omit(stopsdf)
+```
