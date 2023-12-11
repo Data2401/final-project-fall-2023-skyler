@@ -52,7 +52,7 @@ library(tidyverse, warn.conflicts = F)
 options(max.print = 30)
 options(scipen = 10)
 
-stopsdf = read_csv("wb225bk3255_tx_houston_2023_01_26.csv/tx_houston_2023_01_26.csv")
+stopsdf = read_csv("tx_houston_2023_01_26.csv")
 
 ```
 
@@ -61,9 +61,13 @@ stopsdf = read_csv("wb225bk3255_tx_houston_2023_01_26.csv/tx_houston_2023_01_26.
 Let's get a brief look at the dataset. We should know how much data we have.
 
 ```{r}
-glimpse(stopsdf)
+stopsdf %>% 
+  head()
+print(dim(stopsdf))
 
 ```
+
+This is a big dataset. For the sake of computational efficiency, we will need to specify variables to analyze and clean the rest. With grater computational power, all columns could technically be kept, but the direction of the analysis becomes wider. Though, we can perform a few tasks beforehand.
 
 What features are numeric?
 
@@ -77,7 +81,66 @@ stopsdf %>%
   gather(key = "Column", value = "NA_Count") 
 ```
 
-Interesting. There are a lot of na vlaues recorded and longform answers in a few features.
+Interesting. There are a lot of NaN values recorded and longform answers in a few features. Based on this information, cleaning the observations with missing values may provide a clearer analysis. Before doing so, let's check the following:
+
+-   How many citations were distributed and are all observations vehicular?
+
+-   How many violations include SPEED (and by extension, SPEEDING).
+
+-   The number of stops that were traveling at a higher speed than the posted speed.
+
+How many stops resulted in a citation? How many of these stops were vehiclular?
+
+```{r}
+cat("Number of Citations issued: ", 
+    sum(stopsdf$citation_issued, na.rm = TRUE), "\n",
+    "Percentage of Citations: ", 
+    sum(stopsdf$citation_issued, na.rm = TRUE)/nrow(stopsdf), "\n",
+    "Vehicular Stops: ", sum(stopsdf$type, na.rm = TRUE))
+```
+
+This is a dataset consisting of citations only. Which makes sense. Outliers are not recorded, namely, where individuals were stopped but let go and citations issued as 'non_vehicular'.
+
+```{r}
+violation_percent = sum(grepl("SPEED", stopsdf$violation))/nrow(stopsdf)
+# 798387 divided by the amount of rows 2045972
+
+speeding = sum(stopsdf$speed > stopsdf$posted_speed & !is.na(stopsdf$speed) & !is.na(stopsdf$posted_speed))
+
+not_speeding = sum(stopsdf$speed < stopsdf$posted_speed & !is.na(stopsdf$speed) & !is.na(stopsdf$posted_speed))
+
+cat("Violation Percent: ", violation_percent, "\n",
+    "Speeding: ", speeding, "\n",
+    "Not Speeding: ", not_speeding, "\n")
+
+```
+
+Within this dataset, 365 of the stops were not due to speed. After making a temporary dataframe to view violations, I found records marked as incomplete. Out of curiosity once again, how many stops were marked incomplete?
+
+```{r}
+tempdf = stopsdf[!grepl("SPEED", stopsdf$violation), ]
+
+violdf = tempdf[grepl("INCOMPLETE", tempdf$violation), ]
+```
+
+Additionally, after removing NaN values, what is the amount of each afterwards?
+
+```{r}
+cleaneddf = drop_na(stopsdf)
+dim(cleaneddf) 
+
+cl_violation_percent = sum(grepl("SPEED", cleaneddf$violation))/nrow(cleaneddf)
+# 167578 divided by the amount of rows 168231
+
+cl_speeding = sum(cleaneddf$speed > cleaneddf$posted_speed)
+
+cl_not_speeding = sum(cleaneddf$speed < cleaneddf$posted_speed)
+
+cat("Violation Percent: ", cl_violation_percent, "\n",
+    "Speeding: ", cl_speeding, "\n",
+    "Not Speeding: ", cl_not_speeding, "\n")
+
+```
 
 ### Districts
 
