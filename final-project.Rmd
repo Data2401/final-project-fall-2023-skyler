@@ -47,6 +47,7 @@ library(readr, warn.conflicts = F)
 library(ggplot2, warn.conflicts = F)
 library(dplyr, warn.conflicts = F)
 library(tidyverse, warn.conflicts = F)
+library(lubridate)
 #library(shiny, warn.conflicts = F)
 
 options(max.print = 30)
@@ -56,9 +57,9 @@ stopsdf = read_csv("tx_houston_2023_01_26.csv")
 
 ```
 
-## Basic information on the dataset
+## Basic information on the Data
 
-Let's get a brief look at the dataset. We should know how much data we have.
+Let's get a brief look at the data set. We should know how much data we have.
 
 ```{r}
 stopsdf %>% 
@@ -67,21 +68,34 @@ print(dim(stopsdf))
 
 ```
 
-This is a big dataset. For the sake of computational efficiency, we will need to specify variables to analyze and clean the rest. With grater computational power, all columns could technically be kept, but the direction of the analysis becomes wider. Though, we can perform a few tasks beforehand.
+This is a big dataset. For the sake of computational efficiency, we will need to specify variables to analyze and clean the rest. With grater computational power, all columns could technically be kept, but the direction of the analysis becomes wider.
 
-What features are numeric?
+## Briefly Inspecting Observations with N/A 
+
+Though, we can perform a few tasks beforehand. What features are numeric?
 
 ```{r}
 colnames(stopsdf[,sapply(stopsdf,is.numeric)])
+#cat_columns = colnames(stopsdf[,sapply(stopsdf,is.character)])
+```
+
+Looking at the head of the dataframe, it looks like there is a date feature. Let's split the date into year, month, and day. This will help during visualization later.
+
+```{r}
+stopsdf = stopsdf %>% 
+  mutate(year = year(date), 
+  month = month(date),
+  day = day(date)) 
+#%>%  select(-date)
 ```
 
 ```{r}
-stopsdf %>%
-  summarise_all(function(x) sum(is.na(x))) %>%
-  gather(key = "Column", value = "NA_Count") 
+stopsdf %>% 
+  summarise_all(function(x) sum(is.na(x))) %>%  
+  gather(key = "Column", value = "NA_Count")
 ```
 
-Interesting. There are a lot of NaN values recorded and longform answers in a few features. Based on this information, cleaning the observations with missing values may provide a clearer analysis. Before doing so, let's check the following:
+Interesting. There are a lot of N/A values recorded and longform answers in a few features. Based on this information, cleaning the observations with missing values may provide a clearer analysis. Before doing so, let's check the following:
 
 -   How many citations were distributed and are all observations vehicular?
 
@@ -92,11 +106,11 @@ Interesting. There are a lot of NaN values recorded and longform answers in a fe
 How many stops resulted in a citation? How many of these stops were vehiclular?
 
 ```{r}
-cat("Number of Citations issued: ", 
-    sum(stopsdf$citation_issued, na.rm = TRUE), "\n",
+cat("Number of Citations issued: ", sum(stopsdf$citation_issued == 'TRUE', na.rm = TRUE), "\n",
     "Percentage of Citations: ", 
-    sum(stopsdf$citation_issued, na.rm = TRUE)/nrow(stopsdf), "\n",
-    "Vehicular Stops: ", sum(stopsdf$type, na.rm = TRUE))
+    100 * sum(stopsdf$citation_issued == 'TRUE', na.rm = TRUE)/nrow(stopsdf), "\n",
+    "Vehicular Stops: ", sum(stopsdf$type == "vehicular", na.rm = TRUE)
+    )
 ```
 
 This is a dataset consisting of citations only. Which makes sense. Outliers are not recorded, namely, where individuals were stopped but let go and citations issued as 'non_vehicular'.
@@ -115,7 +129,7 @@ cat("Violation Percent: ", violation_percent, "\n",
 
 ```
 
-Within this dataset, 365 of the stops were not due to speed. After making a temporary dataframe to view violations, I found records marked as incomplete. Out of curiosity once again, how many stops were marked incomplete?
+Within this dataset, 365 of the stops were not due to speed. After making a temporary dataframe to view violations, I found records marked as incomplete. Out of curiosity once again, how many stops were marked incomplete? And how many, if any, were still speeding despite records not indicating such?
 
 ```{r}
 tempdf = stopsdf[!grepl("SPEED", stopsdf$violation), ]
@@ -124,11 +138,21 @@ tempdf = stopsdf[!grepl("SPEED", stopsdf$violation), ]
 violdf = tempdf[grepl("INCOMPLETE", tempdf$violation), ]
 # Subsetting stops with incomplete reports
 
-not_speeding - nrow(violdf)
+cat("Rows in df lacking speeding indicator: ", 
+    nrow(tempdf), "\n",
+    
+    "Speeding percentage for records not marked as speed related: ", 100 * (sum(tempdf$speed > tempdf$posted_speed & !is.na(tempdf$speed) & !is.na(tempdf$posted_speed))/nrow(tempdf)), "\n",
+    
+    "Rows in df indicating Incompleteness: ", 
+    nrow(violdf), "\n",
+    
+    "Speeding percentage for records marked Incomplete: ",
+    100 * ((sum(violdf$speed > violdf$posted_speed & !is.na(violdf$speed) & !is.na(violdf$posted_speed)))/nrow(violdf)), "\n"
+    )
 
 ```
 
-Additionally, after removing NaN values, what is the amount of each afterwards?
+Additionally, after removing N/A values, what is the amount of each afterwards? Somtimes we can remove N/A values to analyze the rest. In this case, we will likely be visualizing and looking at aspects surrounding citations issued due to speeding.
 
 ```{r}
 cleaneddf = drop_na(stopsdf)
@@ -141,32 +165,90 @@ cl_speeding = sum(cleaneddf$speed > cleaneddf$posted_speed)
 
 cl_not_speeding = sum(cleaneddf$speed < cleaneddf$posted_speed)
 
-cat("Violation Percent: ", cl_violation_percent, "\n",
+cat("Violation Percent: ", 100 * cl_violation_percent, "\n",
     "Speeding: ", cl_speeding, "\n",
-    "Not Speeding: ", cl_not_speeding, "\n",
-    "Complete observations (Unrelated to Speed): ", cl_not_speeding - nrow(drop_na(violdf))
+    "Not Speeding: ", cl_not_speeding, "\n"
     )
+
 
 ```
 
-### Districts
+## Is the subset representative? 
 
-Which districts are covered?
+Since most individuals were speeding, it makes more sense to analyze based on speeding in a cleaned dataframe. However, how does removing N/A entries change analysis of other features?
+
+## Visualizations
+
+```{r}
+speedingmatrix = rbind(speeding, cl_speeding) 
+
+barplot(speedingmatrix, beside = TRUE, main = "Comparison Speeding Stops", xlab = "Districts", ylab = "Stop Totals", col = c("blue", "orange"))
+legend("topright", legend = c("Uncleaned", "Cleaned"), fill = c("blue", "orange"))
+```
+
+### What are the numbers for districts and beats covered? 
+
+The count for each will likely change upon viewing the original and an N/A cleaned dataframe.
 
 ```{r}
 stopsdf %>% 
-  group_by(beat, district) %>% 
+  group_by(district) %>% 
+  summarise(Count = n()) %>% 
+  arrange(desc(Count)) 
+
+cleaneddf %>% 
+  group_by(district) %>% 
   summarise(Count = n()) %>% 
   arrange(desc(Count))
+  
+districtcount = table(stopsdf$district)
+cl_districtcount = table(cleaneddf$district)
+
+plot_matrix = rbind(districtcount, cl_districtcount) 
+
+barplot(plot_matrix, beside = TRUE, main = "Comparison of Stops Made in Before and After Cleaning", xlab = "Districts", ylab = "Stop Totals", col = c("blue", "orange"))
+legend("topright", legend = c("Uncleaned", "Cleaned"), fill = c("blue", "orange")) 
 ```
 
-## Graphs, plots, visualizations
+### What are the streets with the most citations_issued? 
+
+```{r}
+top10_locations = stopsdf %>%
+  filter(!is.na(location)) %>%
+  group_by(location) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(10)
+
+ggplot(top10_locations, aes(x = count, y = reorder(location, -count))) +
+  geom_bar(fill = "blue", color = "black", stat = "identity") +
+  xlab("Amount") +
+  ylab("Locations") +
+  ggtitle("Top 10 Locations for Citations")
+
+
+cleaned_10_locations = cleaneddf %>%
+  filter(!is.na(location)) %>%
+  group_by(location) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(10)
+
+ggplot(cleaned_10_locations, aes(x = count, y = reorder(location, -count))) +
+  geom_bar(fill = "orange", color = "black", stat = "identity") +
+  xlab("Amount") +
+  ylab("Locations") +
+  ggtitle("Top 10 Locations for Citations (Cleaned)")
+
+```
+
+### Is there a difference between the amount of Sexes stopped?
 
 ```{r}
 stopsdf %>% 
   filter(!is.na(subject_sex)) %>% 
   ggplot(aes(x = subject_sex)) + 
-  geom_bar(fill = "#4472C4", color = "black") + 
+  geom_bar(fill = "blue", color = "black") + 
   theme_minimal() + 
   theme(plot.background = element_rect(fill = "white"),
         panel.background = element_rect(fill = "white"),
@@ -175,15 +257,28 @@ stopsdf %>%
   labs(title = "Distribution of Stops by Sex",
        x = "Sexes Stopped",
        y = "Frequency")
+
+cleaneddf %>% 
+  filter(!is.na(subject_sex)) %>% 
+  ggplot(aes(x = subject_sex)) + 
+  geom_bar(fill = "orange", color = "black") + 
+  theme_minimal() + 
+  theme(plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  labs(title = "Distribution of Stops by Sex (Cleaned)",
+       x = "Sexes Stopped",
+       y = "Frequency")
 ```
 
-## By Race
+### And Races?
 
 ```{r}
 stopsdf %>% 
   filter(citation_issued == TRUE & !is.na(subject_race)) %>% 
   ggplot(aes(x = subject_race)) + 
-  geom_bar(fill = "#4472C4", color = "black") + 
+  geom_bar(fill = "blue", color = "black") + 
   theme_minimal() + 
   theme(plot.background = element_rect(fill = "white"),
         panel.background = element_rect(fill = "white"),
@@ -192,16 +287,71 @@ stopsdf %>%
   labs(title = "Distribution of Citations by Race",
        x = "Races Stopped",
        y = "Frequency")
+
+cleaneddf %>% 
+  filter(citation_issued == TRUE & !is.na(subject_race)) %>% 
+  ggplot(aes(x = subject_race)) + 
+  geom_bar(fill = "orange", color = "black") + 
+  theme_minimal() + 
+  theme(plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  labs(title = "Distribution of Citations by Race (Cleaned)",
+       x = "Races Stopped",
+       y = "Frequency")
 ```
+
+### Speeding 
 
 ```{r}
 stopsdf %>% 
   filter(speed > 0 , speed < 200) %>% 
   ggplot(aes(x = subject_race, y = speed)) + 
-  geom_boxplot(fill = "#4472C4", color = "black") + 
+  geom_boxplot(fill = "blue", color = "black") + 
   theme_minimal() + 
   labs(title = "Speeding Distrubtion by Race",
        x = "Races",
+       y = "Speed (mph)")
+
+cleaneddf %>% 
+  filter(speed > 0 , speed < 200) %>% 
+  ggplot(aes(x = subject_race, y = speed)) + 
+  geom_boxplot(fill = "orange", color = "black") +
+  theme_minimal() + 
+  labs(title = "Speeding Distrubtion by Race (Clean)",
+       x = "Races",
+       y = "Speed (mph)")
+```
+
+### Creating a speeding indicator
+
+This could have been helpful earlier, but for the purposes of making graphs it works fine here.
+
+```{r}
+stopsdf = stopsdf %>% 
+  mutate(speeding = speed > posted_speed)
+
+cleaneddf = drop_na(stopsdf)
+  
+```
+
+```{r}
+ggplot(cleaneddf, aes(x = month, y = speed)) +
+  geom_dotplot() +
+  xlab("Month") +
+  ylab("Speed") +
+  ggtitle("Dot Plot of Speed Over Time")
+
+```
+
+```{r}
+cleaneddf %>% 
+  ggplot(aes(x = day, y = speed)) + 
+  geom_boxplot(fill = "orange", color = "black") +
+  theme_minimal() + 
+  labs(title = "Speeding Distrubtion by Day of the Month",
+       x = "Days",
        y = "Speed (mph)")
 ```
 
@@ -209,25 +359,36 @@ stopsdf %>%
 
 ```{r}
 stopsdf %>% 
-  filter(!is.na(beat), !is.na(subject_race), !is.na(subject_sex)) %>% 
-  ggplot(aes(x = subject_sex)) + 
-  geom_bar(fill = "#4472C4", color = "black") +
-  labs(title = "Distribution of Stops by Beat",
-       x = "Races Stopped",
-       y = "Frequency")
+  filter(!is.na(district), speeding == FALSE) %>% 
+  ggplot(aes(x = district)) + 
+  geom_bar(fill = "blue", color = "black") +
+  labs(title = "Verifying Speeding per District",
+       x = "District",
+       y = "Frequency of Stops")
+
+cleaneddf %>%
+  filter(!is.na(district), speeding == FALSE) %>% 
+  ggplot(aes(x = district)) + 
+  geom_bar(fill = "orange", color = "black") +
+  labs(title = "Verifying Speeding per District (Cleaned)",
+       x = "District",
+       y = "Frequency of Stops")
 ```
 
-Objectives for the final report:
-
--   Compare present and absent values by feature
-
--   Analyze stops under the speed limit
-
--   Analyze car colors stopped
-
--   Interactive Shiny for comprehensive visualizations
+## Final comparison between both frames
 
 ```{r}
-# Analyze the dataset without NA values
-stopsdf_no_na <- na.omit(stopsdf)
+stopsdf %>%
+  count(month, year) %>%
+  ggplot(aes(x = month, y = n, fill = as.factor(year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Month", y = "Number of Stops", fill = "Year",
+       title = "Number of Stops by Month and Year")
+
+cleaneddf %>%
+  count(month, year) %>%
+  ggplot(aes(x = month, y = n, fill = as.factor(year))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Month", y = "Number of Stops", fill = "Year",
+       title = "Number of Stops by Month and Year (Cleaned)")
 ```
