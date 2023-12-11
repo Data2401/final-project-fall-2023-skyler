@@ -119,8 +119,13 @@ Within this dataset, 365 of the stops were not due to speed. After making a temp
 
 ```{r}
 tempdf = stopsdf[!grepl("SPEED", stopsdf$violation), ]
+# Subsetting stops without speed related citations
 
 violdf = tempdf[grepl("INCOMPLETE", tempdf$violation), ]
+# Subsetting stops with incomplete reports
+
+not_speeding - nrow(violdf)
+
 ```
 
 Additionally, after removing NaN values, what is the amount of each afterwards?
@@ -138,7 +143,9 @@ cl_not_speeding = sum(cleaneddf$speed < cleaneddf$posted_speed)
 
 cat("Violation Percent: ", cl_violation_percent, "\n",
     "Speeding: ", cl_speeding, "\n",
-    "Not Speeding: ", cl_not_speeding, "\n")
+    "Not Speeding: ", cl_not_speeding, "\n",
+    "Complete observations (Unrelated to Speed): ", cl_not_speeding - nrow(drop_na(violdf))
+    )
 
 ```
 
