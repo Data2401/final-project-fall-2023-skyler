@@ -1,11 +1,12 @@
 ---
-title: "EDA of Traffic Stops in Houston, Texas: Data 2401 Final"
-date: "2023-11-24"
+title: 'EDA of Traffic Stops in Houston, Texas: Data 2401 Final'
 author: "Skyler Phillips"
+date: "2023-11-24"
 output:
   slidy_presentation: default
   pdf_document: default
   html_document: default
+  ioslides_presentation: default
 ---
 
 ```{r setup, include=FALSE}
@@ -334,25 +335,6 @@ stopsdf = stopsdf %>%
 
 cleaneddf = drop_na(stopsdf)
   
-```
-
-```{r}
-ggplot(cleaneddf, aes(x = month, y = speed)) +
-  geom_dotplot() +
-  xlab("Month") +
-  ylab("Speed") +
-  ggtitle("Dot Plot of Speed Over Time")
-
-```
-
-```{r}
-cleaneddf %>% 
-  ggplot(aes(x = day, y = speed)) + 
-  geom_boxplot(fill = "orange", color = "black") +
-  theme_minimal() + 
-  labs(title = "Speeding Distrubtion by Day of the Month",
-       x = "Days",
-       y = "Speed (mph)")
 ```
 
 ## Stops in Each Beat
